@@ -88,8 +88,9 @@ class IdlNamer : public Namer {
   }
 
   std::string Directories(const struct Namespace &ns,
-                          SkipDir skips = SkipDir::None) const {
-    return Directories(ns.components, skips);
+                          SkipDir skips = SkipDir::None,
+                          Case input_case = Case::kUpperCamel) const {
+    return Directories(ns.components, skips, input_case);
   }
 
   // Legacy fields do not really follow the usual config and should be
@@ -102,6 +103,10 @@ class IdlNamer : public Namer {
   std::string LegacyRustFieldOffsetName(const FieldDef &field) const {
     return "VT_" + ConvertCase(EscapeKeyword(field.name), Case::kAllUpper);
   }
+    std::string LegacyRustUnionTypeOffsetName(const FieldDef &field) const {
+    return "VT_" + ConvertCase(EscapeKeyword(field.name + "_type"), Case::kAllUpper);
+  }
+
 
   std::string LegacySwiftVariant(const EnumVal &ev) const {
     auto name = ev.name;
@@ -138,6 +143,12 @@ class IdlNamer : public Namer {
   // lower camel case.
   std::string LegacyTsMutateMethod(const FieldDef& d) {
     return "mutate_" + d.name;
+  }
+
+  std::string LegacyRustUnionTypeMethod(const FieldDef &d) {
+    // assert d is a union
+    // d should convert case but not escape keywords due to historical reasons
+    return ConvertCase(d.name, config_.fields, Case::kLowerCamel) + "_type";
   }
 
  private:

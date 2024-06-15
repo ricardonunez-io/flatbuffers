@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google Inc. All rights reserved.
+ * Copyright 2024 Google Inc. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-#if !os(WASI)
 import Foundation
-#else
-import SwiftOverlayShims
-#endif
 
 /// Collection of thrown from the Flatbuffer verifier
 public enum FlatbuffersErrors: Error, Equatable {
@@ -66,12 +62,12 @@ public enum FlatbuffersErrors: Error, Equatable {
 #if !os(WASI)
 
 extension FlatbuffersErrors {
-    public static func == (
-      lhs: FlatbuffersErrors,
-      rhs: FlatbuffersErrors) -> Bool
-    {
-      lhs.localizedDescription == rhs.localizedDescription
-    }
+  public static func == (
+    lhs: FlatbuffersErrors,
+    rhs: FlatbuffersErrors) -> Bool
+  {
+    lhs.localizedDescription == rhs.localizedDescription
+  }
 }
 
 #endif
