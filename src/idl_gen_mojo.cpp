@@ -267,7 +267,7 @@ class MojoGenerator : public BaseGenerator {
           code_.IncrementIdentLevel();
           code_ += "var start = flatbuffers.field_vector(self._buf, int(self._pos), {{OFFSET}}) + i * {{SIZE}}";
           if (!(vectortype.struct_def->fixed)) {
-            code_ += "start += int(flatbuffers.indirect(self._buf, start))";
+            code_ += "start += flatbuffers.read_offset_as_int(self._buf, start)";
           }
           code_ += "return {{TYPE_NAME}}(self._buf, start)";
           code_.DecrementIdentLevel();
@@ -429,7 +429,7 @@ class MojoGenerator : public BaseGenerator {
       code_ += "@staticmethod";
       code_ += "fn as_root(buf: UnsafePointer[UInt8]) -> {{NAME}}:";
       code_.IncrementIdentLevel();
-      code_ += "return {{NAME}}(buf, flatbuffers.indirect(buf, 0))";
+      code_ += "return {{NAME}}(buf, flatbuffers.read_offset_as_int(buf, 0))";
       code_.DecrementIdentLevel();
       code_ += "";
 
