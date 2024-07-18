@@ -142,7 +142,7 @@ class MojoGenerator : public BaseGenerator {
       return NormalizedName(*type.enum_def);
     if (IsVectorOfTable(type)) return "List[flatbuffers.Offset]";
     if (IsVector(type) && !IsVectorOfStruct(type)) return "List[" + MojoType(type.VectorType()) + "]";
-    if (IsString(type)) return "Optional[String]";
+    if (IsString(type)) return "Optional[StringRef]";
     if (IsStruct(type)) return "Optional[" + NormalizedName(*type.struct_def) + "VO]";
     if (!IsScalar(type.base_type)) return "Optional[flatbuffers.Offset]";
     return "Int" + bits;
@@ -412,8 +412,8 @@ class MojoGenerator : public BaseGenerator {
     code_.SetValue("NAME", NormalizedName(struct_def));
     code_ += "@value";
     code_ += "struct {{NAME}}:";
-    code_ += "    var _buf: DTypePointer[DType.uint8]";
-    code_ += "    var _pos: Int32";
+    code_ += "    var _buf: UnsafePointer[UInt8]";
+    code_ += "    var _pos: Int";
     code_ += "";
     code_.IncrementIdentLevel();
     for (auto it = struct_def.fields.vec.begin();
@@ -427,7 +427,7 @@ class MojoGenerator : public BaseGenerator {
       // the root type.
       code_.SetValue("NAME", NormalizedName(struct_def));
       code_ += "@staticmethod";
-      code_ += "fn as_root(buf: DTypePointer[DType.uint8]) -> {{NAME}}:";
+      code_ += "fn as_root(buf: UnsafePointer[UInt8]) -> {{NAME}}:";
       code_.IncrementIdentLevel();
       code_ += "return {{NAME}}(buf, flatbuffers.indirect(buf, 0))";
       code_.DecrementIdentLevel();
