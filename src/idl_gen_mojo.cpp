@@ -98,15 +98,16 @@ class MojoGenerator : public BaseGenerator {
 
   std::string DTypeName(const Type &type) {
     auto bits = NumToString(SizeOf(type.base_type) * 8);
+    if (IsBool(type.base_type)) {
+      return "DType.bool";
+    }
     if (IsInteger(type.base_type)) {
       if (IsUnsigned(type.base_type))
         return "DType.uint" + bits;
       else
         return "DType.int" + bits;
     }
-    if (IsBool(type.base_type)) {
-      return "DType.bool";
-    }
+
     return "None";
   }
 
