@@ -716,7 +716,7 @@ class MojoGenerator : public BaseGenerator {
     code_ += "import flatbuffers";
     for (const auto &included : parser_.GetIncludedFiles()) {
       code_.SetValue("FILE_NAME", included.schema_name.substr(0, included.schema_name.size()-4) + parser_.opts.filename_suffix);
-      code_ += "from {{FILE_NAME}} import *";
+      code_ += "from .{{FILE_NAME}} import *";
     }
     code_ += "";
     for (auto it = parser_.enums_.vec.begin(); it != parser_.enums_.vec.end();
