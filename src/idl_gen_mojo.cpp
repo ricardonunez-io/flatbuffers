@@ -141,6 +141,8 @@ class MojoGenerator : public BaseGenerator {
     if (IsScalar(type.base_type) && type.enum_def)
       return NormalizedName(*type.enum_def);
     if (IsVectorOfTable(type)) return "List[flatbuffers.Offset]";
+    if (IsVectorOfStruct(type)) return "List[" + NormalizedName(*type.VectorType().struct_def) + "VO]";
+    if (IsVector(type) && IsString(type.VectorType())) return "List[flatbuffers.Offset]";
     if (IsVector(type) && !IsVectorOfStruct(type)) return "List[" + MojoType(type.VectorType()) + "]";
     if (IsString(type)) return "Optional[StringRef]";
     if (IsStruct(type)) return "Optional[" + NormalizedName(*type.struct_def) + "VO]";
@@ -152,6 +154,13 @@ class MojoGenerator : public BaseGenerator {
     if (IsVectorOfTable(def.value.type)) {
       return "List[flatbuffers.Offset]()";
     }
+    if (IsVectorOfStruct(def.value.type)) {
+      return "List[" + NormalizedName(*def.value.type.VectorType().struct_def) + "VO]()";
+    }
+    if (IsVector(def.value.type) && IsString(def.value.type.VectorType())) {
+      return "List[flatbuffers.Offset]()";
+    }
+
     if (IsVector(def.value.type) && !IsVectorOfStruct(def.value.type)) {
       return "List[" + MojoType(def.value.type.VectorType()) + "]()";
     }
@@ -462,7 +471,7 @@ class MojoGenerator : public BaseGenerator {
           code_.IncrementIdentLevel();
           code_ += "_{{ARG_NAME}} = builder.prepend({{ARG_NAME}}.value())";
           code_.DecrementIdentLevel();
-        } else if (IsVector(arg.value.type) && !IsVectorOfStruct(arg.value.type)) {
+        } else if (IsVector(arg.value.type)) {
           code_ += "var _{{ARG_NAME}}: Optional[flatbuffers.Offset] = None";
           code_ += "if len({{ARG_NAME}}) > 0:";
           code_.IncrementIdentLevel();
@@ -474,6 +483,19 @@ class MojoGenerator : public BaseGenerator {
           code_.IncrementIdentLevel();
           if (IsEnum(vector_type)) {
             code_ += "builder.prepend(o[].value)";
+          } else if(IsStruct(vector_type)) {
+            code_.SetValue("STRUCT_NAME", NormalizedName(*vector_type.struct_def));
+            code_ += "{{STRUCT_NAME}}.build(";
+            code_.IncrementIdentLevel();
+            code_ += "builder,";
+            for (auto it = arg.value.type.struct_def->fields.vec.begin();
+                 it != arg.value.type.struct_def->fields.vec.end(); ++it) {
+              auto &field = **it;
+              code_.SetValue("FIELD_NAME", NormalizedName(field));
+              code_ += "{{FIELD_NAME}}=o[].{{FIELD_NAME}},";
+            }
+            code_.DecrementIdentLevel();
+            code_ += ")";
           } else {
             code_ += "builder.prepend(o[])";
           }
@@ -498,7 +520,7 @@ class MojoGenerator : public BaseGenerator {
         if (IsScalar(arg.value.type.base_type) && !arg.IsOptional()){
           code_ += "if {{ARG_VALUE}} != {{ARG_DEFAULT}}:";
         } else {
-          if (IsString(arg.value.type) || (IsVector(arg.value.type) && !IsVectorOfStruct(arg.value.type))) {
+          if (IsString(arg.value.type) || (IsVector(arg.value.type))) {
             code_.SetValue("ARG_VALUE", "_" + NormalizedName(arg));
           }
           code_ += "if {{ARG_VALUE}} is not None:";
