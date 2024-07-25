@@ -144,6 +144,8 @@ class MojoGenerator : public BaseGenerator {
     if (IsVectorOfTable(type)) return "List[flatbuffers.Offset]";
     if (IsVectorOfStruct(type)) return "List[" + NormalizedName(*type.VectorType().struct_def) + "VO]";
     if (IsVector(type) && IsString(type.VectorType())) return "List[flatbuffers.Offset]";
+    if (IsVector(type) && IsUnionType(type.VectorType())) return "List[" + MojoType(type.VectorType()) + "]";
+    if (IsVector(type) && IsUnion(type.VectorType())) return "List[flatbuffers.Offset]";
     if (IsVector(type) && !IsVectorOfStruct(type)) return "List[" + MojoType(type.VectorType()) + "]";
     if (IsString(type)) return "Optional[StringRef]";
     if (IsStruct(type)) return "Optional[" + NormalizedName(*type.struct_def) + "VO]";
@@ -161,7 +163,12 @@ class MojoGenerator : public BaseGenerator {
     if (IsVector(def.value.type) && IsString(def.value.type.VectorType())) {
       return "List[flatbuffers.Offset]()";
     }
-
+    if (IsVector(def.value.type) && IsUnionType(def.value.type.VectorType())) {
+      return "List[" + MojoType(def.value.type.VectorType()) + "]()";
+    }
+    if (IsVector(def.value.type) && IsUnion(def.value.type.VectorType())) {
+      return "List[flatbuffers.Offset]()";
+    }
     if (IsVector(def.value.type) && !IsVectorOfStruct(def.value.type)) {
       return "List[" + MojoType(def.value.type.VectorType()) + "]()";
     }
@@ -282,6 +289,22 @@ class MojoGenerator : public BaseGenerator {
           code_ += "return {{TYPE_NAME}}(self._buf, start)";
           code_.DecrementIdentLevel();
           code_ += "";
+        } else if(IsUnion(vectortype) && !IsUnionType(vectortype)) {
+          for (auto it = vectortype.enum_def->Vals().begin();
+               it != vectortype.enum_def->Vals().end(); ++it) {
+            auto &ev = **it;
+            if (ev.IsNonZero()) {
+              code_.SetValue("TYPE_NAME", NormalizedName(*ev.union_type.struct_def));
+              code_.SetValue("EV", ev.name);
+              code_ += "fn {{NAME}}_as_{{EV}}(self, i: Int) -> {{TYPE_NAME}}:";
+              code_.IncrementIdentLevel();
+              code_ += "var start = flatbuffers.field_vector(self._buf, int(self._pos), {{OFFSET}}) + i * 4";
+              code_ += "start += flatbuffers.read_offset_as_int(self._buf, start)";
+              code_ += "return {{TYPE_NAME}}(self._buf, start)";
+              code_.DecrementIdentLevel();
+              code_ += "";
+            }
+          }
         } else {
           if (IsString(vectortype)) {
             code_.SetValue("TYPE_NAME", "StringRef");
