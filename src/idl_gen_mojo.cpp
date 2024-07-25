@@ -107,6 +107,9 @@ class MojoGenerator : public BaseGenerator {
       else
         return "DType.int" + bits;
     }
+    if (IsFloat(type.base_type)) {
+      return "DType.float" + bits;
+    }
 
     return "None";
   }
@@ -150,6 +153,7 @@ class MojoGenerator : public BaseGenerator {
     if (IsString(type)) return "Optional[StringRef]";
     if (IsStruct(type)) return "Optional[" + NormalizedName(*type.struct_def) + "VO]";
     if (!IsScalar(type.base_type)) return "Optional[flatbuffers.Offset]";
+    if (IsUnsigned(type.base_type)) return "UInt" + bits;
     return "Int" + bits;
   }
 
@@ -228,7 +232,18 @@ class MojoGenerator : public BaseGenerator {
                           : field.value.constant;
         code_.SetValue("DTYPE", DTypeName(field.value.type));
         code_.SetValue("DEFVAL", defval);
-        code_ += "return flatbuffers.field[{{DTYPE}}](self._buf, int(self._pos), {{OFFSET}}, {{DEFVAL}})";
+        if (field.IsOptional()) {
+          if (IsEnum(field.value.type)) {
+            code_ += "var value = flatbuffers.field[{{DTYPE}}](self._buf, int(self._pos), {{OFFSET}})";
+            code_ += "if not value: return None";
+            code_ += "return {{TYPE_NAME}}(value.value())";
+          } else {
+            code_ += "return flatbuffers.field[{{DTYPE}}](self._buf, int(self._pos), {{OFFSET}})";
+          }
+        } else {
+          code_ += "return flatbuffers.field[{{DTYPE}}](self._buf, int(self._pos), {{OFFSET}}, {{DEFVAL}})";
+        }
+
       }
       code_.DecrementIdentLevel();
       code_ += "";
@@ -477,6 +492,9 @@ class MojoGenerator : public BaseGenerator {
         if (arg.deprecated) continue;
         code_.SetValue("ARG_NAME", NormalizedName(arg));
         code_.SetValue("ARG_TYPE", MojoArgType(arg.value.type));
+        if (arg.IsOptional()) {
+          code_.SetValue("ARG_TYPE", "Optional[" + MojoArgType(arg.value.type) + "]");
+        }
         code_.SetValue("ARG_DEFAULT", MojoArgDefault(arg));
         code_ += "{{ARG_NAME}}: {{ARG_TYPE}} = {{ARG_DEFAULT}},";
       }
@@ -569,8 +587,9 @@ class MojoGenerator : public BaseGenerator {
         } else {
           if (!(IsScalar(arg.value.type.base_type) && !arg.IsOptional())) {
             code_.SetValue("ARG_VALUE", code_.GetValue("ARG_VALUE") + ".value()");
-          } else if (IsEnum(arg.value.type)) {
-            code_.SetValue("ARG_VALUE", NormalizedName(arg) + ".value");
+          }
+          if (IsEnum(arg.value.type)) {
+            code_.SetValue("ARG_VALUE", code_.GetValue("ARG_VALUE") + ".value");
           }
           code_ += "builder.prepend({{ARG_VALUE}})";
           code_ += "builder.slot({{OFFSET}})";
