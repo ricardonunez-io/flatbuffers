@@ -157,6 +157,25 @@ class MojoGenerator : public BaseGenerator {
     return "Int" + bits;
   }
 
+  std::string MojoArgRequiredType(const Type &type) {
+    auto bits = NumToString(SizeOf(type.base_type) * 8);
+    if (IsFloat(type.base_type)) return "Float" + bits;
+    if (IsBool(type.base_type)) return "Scalar[DType.bool]";
+    if (IsScalar(type.base_type) && type.enum_def)
+      return NormalizedName(*type.enum_def);
+    if (IsVectorOfTable(type)) return "List[flatbuffers.Offset]";
+    if (IsVectorOfStruct(type)) return "List[" + NormalizedName(*type.VectorType().struct_def) + "VO]";
+    if (IsVector(type) && IsString(type.VectorType())) return "List[flatbuffers.Offset]";
+    if (IsVector(type) && IsUnionType(type.VectorType())) return "List[" + MojoType(type.VectorType()) + "]";
+    if (IsVector(type) && IsUnion(type.VectorType())) return "List[flatbuffers.Offset]";
+    if (IsVector(type) && !IsVectorOfStruct(type)) return "List[" + MojoType(type.VectorType()) + "]";
+    if (IsString(type)) return "StringRef";
+    if (IsStruct(type)) return NormalizedName(*type.struct_def) + "VO";
+    if (!IsScalar(type.base_type)) return "flatbuffers.Offset";
+    if (IsUnsigned(type.base_type)) return "UInt" + bits;
+    return "Int" + bits;
+  }
+
   std::string MojoArgDefault(const FieldDef &def) {
     if (IsVectorOfTable(def.value.type)) {
       return "List[flatbuffers.Offset]()";
@@ -289,6 +308,13 @@ class MojoGenerator : public BaseGenerator {
         code_ += "return flatbuffers.field_string(self._buf, int(self._pos), {{OFFSET}})";
         code_.DecrementIdentLevel();
         code_ += "";
+        if (!field.IsRequired()) {
+          code_ += "fn has_{{NAME}}(self) -> Bool:";
+          code_.IncrementIdentLevel();
+          code_ += "return flatbuffers.has_field(self._buf, int(self._pos), {{OFFSET}})";
+          code_.DecrementIdentLevel();
+          code_ += "";
+        }
         break;
       case BASE_TYPE_VECTOR: {
         auto vectortype = field.value.type.VectorType();
@@ -331,6 +357,14 @@ class MojoGenerator : public BaseGenerator {
           code_ += "fn {{NAME}}(self, i: Int) -> {{TYPE_NAME}}:";
           code_.IncrementIdentLevel();
           code_ += "return {{GET_FUNC}}(self._buf, flatbuffers.field_vector(self._buf, int(self._pos), {{OFFSET}}) + i * {{SIZE}})";
+          code_.DecrementIdentLevel();
+          code_ += "";
+        }
+
+        if (!field.IsRequired()) {
+          code_ += "fn has_{{NAME}}(self) -> Bool:";
+          code_.IncrementIdentLevel();
+          code_ += "return flatbuffers.has_field(self._buf, int(self._pos), {{OFFSET}})";
           code_.DecrementIdentLevel();
           code_ += "";
         }
@@ -489,10 +523,18 @@ class MojoGenerator : public BaseGenerator {
       for (auto it = struct_def.fields.vec.begin();
            it != struct_def.fields.vec.end(); ++it) {
         auto &arg = **it;
-        if (arg.deprecated) continue;
+        if (arg.deprecated || !arg.IsRequired()) continue;
+        code_.SetValue("ARG_NAME", NormalizedName(arg));
+        code_.SetValue("ARG_TYPE", MojoArgRequiredType(arg.value.type));
+        code_ += "{{ARG_NAME}}: {{ARG_TYPE}},";
+      }
+      for (auto it = struct_def.fields.vec.begin();
+           it != struct_def.fields.vec.end(); ++it) {
+        auto &arg = **it;
+        if (arg.deprecated || arg.IsRequired()) continue;
         code_.SetValue("ARG_NAME", NormalizedName(arg));
         code_.SetValue("ARG_TYPE", MojoArgType(arg.value.type));
-        if (arg.IsOptional()) {
+        if (arg.IsScalar() && arg.IsOptional()) {
           code_.SetValue("ARG_TYPE", "Optional[" + MojoArgType(arg.value.type) + "]");
         }
         code_.SetValue("ARG_DEFAULT", MojoArgDefault(arg));
@@ -508,11 +550,15 @@ class MojoGenerator : public BaseGenerator {
         if (arg.deprecated) continue;
         code_.SetValue("ARG_NAME", NormalizedName(arg));
         if (IsString(arg.value.type)) {
-          code_ += "var _{{ARG_NAME}}: Optional[flatbuffers.Offset] = None";
-          code_ += "if {{ARG_NAME}} is not None:";
-          code_.IncrementIdentLevel();
-          code_ += "_{{ARG_NAME}} = builder.prepend({{ARG_NAME}}.value())";
-          code_.DecrementIdentLevel();
+          if (arg.IsRequired()) {
+            code_ += "var _{{ARG_NAME}} = builder.prepend({{ARG_NAME}})";
+          } else {
+            code_ += "var _{{ARG_NAME}}: Optional[flatbuffers.Offset] = None";
+            code_ += "if {{ARG_NAME}} is not None:";
+            code_.IncrementIdentLevel();
+            code_ += "_{{ARG_NAME}} = builder.prepend({{ARG_NAME}}.value())";
+            code_.DecrementIdentLevel();
+          }
         } else if (IsVector(arg.value.type)) {
           code_ += "var _{{ARG_NAME}}: Optional[flatbuffers.Offset] = None";
           code_ += "if len({{ARG_NAME}}) > 0:";
@@ -559,15 +605,17 @@ class MojoGenerator : public BaseGenerator {
         code_.SetValue("ARG_VALUE", NormalizedName(arg));
         code_.SetValue("ARG_DEFAULT", MojoArgDefault(arg));
         code_.SetValue("OFFSET", NumToString(it - struct_def.fields.vec.begin()));
-        if (IsScalar(arg.value.type.base_type) && !arg.IsOptional()){
-          code_ += "if {{ARG_VALUE}} != {{ARG_DEFAULT}}:";
-        } else {
-          if (IsString(arg.value.type) || (IsVector(arg.value.type))) {
-            code_.SetValue("ARG_VALUE", "_" + NormalizedName(arg));
-          }
-          code_ += "if {{ARG_VALUE}} is not None:";
+        if (IsString(arg.value.type) || (IsVector(arg.value.type))) {
+          code_.SetValue("ARG_VALUE", "_" + NormalizedName(arg));
         }
-        code_.IncrementIdentLevel();
+        if (!arg.IsRequired()) {
+          if (IsScalar(arg.value.type.base_type) && !arg.IsOptional()){
+            code_ += "if {{ARG_VALUE}} != {{ARG_DEFAULT}}:";
+          } else {
+            code_ += "if {{ARG_VALUE}} is not None:";
+          }
+          code_.IncrementIdentLevel();
+        }
         if (IsStruct(arg.value.type)) {
           code_.SetValue("STRUCT_NAME", NormalizedName(*arg.value.type.struct_def));
           code_ += "{{STRUCT_NAME}}.build(";
@@ -583,9 +631,11 @@ class MojoGenerator : public BaseGenerator {
           code_.DecrementIdentLevel();
           code_ += ")";
           code_ += "builder.slot({{OFFSET}})";
-          code_.DecrementIdentLevel();
+          if (!arg.IsRequired()) {
+            code_.DecrementIdentLevel();
+          }
         } else {
-          if (!(IsScalar(arg.value.type.base_type) && !arg.IsOptional())) {
+          if (!(IsScalar(arg.value.type.base_type) && !arg.IsOptional()) && !arg.IsRequired()) {
             code_.SetValue("ARG_VALUE", code_.GetValue("ARG_VALUE") + ".value()");
           }
           if (IsEnum(arg.value.type)) {
@@ -593,7 +643,9 @@ class MojoGenerator : public BaseGenerator {
           }
           code_ += "builder.prepend({{ARG_VALUE}})";
           code_ += "builder.slot({{OFFSET}})";
-          code_.DecrementIdentLevel();
+          if (!arg.IsRequired()) {
+            code_.DecrementIdentLevel();
+          }
         }
       }
       code_ += "return builder.end_object()";
