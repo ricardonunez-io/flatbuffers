@@ -608,7 +608,8 @@ class MojoGenerator : public BaseGenerator {
         if (IsString(arg.value.type) || (IsVector(arg.value.type))) {
           code_.SetValue("ARG_VALUE", "_" + NormalizedName(arg));
         }
-        if (!arg.IsRequired()) {
+        bool needs_unpacking = !arg.IsRequired() || IsVector(arg.value.type);
+        if (needs_unpacking) {
           if (IsScalar(arg.value.type.base_type) && !arg.IsOptional()){
             code_ += "if {{ARG_VALUE}} != {{ARG_DEFAULT}}:";
           } else {
@@ -621,21 +622,25 @@ class MojoGenerator : public BaseGenerator {
           code_ += "{{STRUCT_NAME}}.build(";
           code_.IncrementIdentLevel();
           code_ += "builder,";
-//          code_.SetValue("ARG_VALUE", NormalizedName(arg));
           for (auto it = arg.value.type.struct_def->fields.vec.begin();
                it != arg.value.type.struct_def->fields.vec.end(); ++it) {
             auto &field = **it;
             code_.SetValue("FIELD_NAME", NormalizedName(field));
-            code_ += "{{FIELD_NAME}}={{ARG_VALUE}}.value().{{FIELD_NAME}},";
+            if (arg.IsRequired()) {
+              code_ += "{{FIELD_NAME}}={{ARG_VALUE}}.{{FIELD_NAME}},";
+            } else {
+              code_ += "{{FIELD_NAME}}={{ARG_VALUE}}.value().{{FIELD_NAME}},";
+            }
+
           }
           code_.DecrementIdentLevel();
           code_ += ")";
           code_ += "builder.slot({{OFFSET}})";
-          if (!arg.IsRequired()) {
+          if (needs_unpacking) {
             code_.DecrementIdentLevel();
           }
         } else {
-          if (!(IsScalar(arg.value.type.base_type) && !arg.IsOptional()) && !arg.IsRequired()) {
+          if ((!(IsScalar(arg.value.type.base_type) && !arg.IsOptional()) && !arg.IsRequired()) || IsVector(arg.value.type)) {
             code_.SetValue("ARG_VALUE", code_.GetValue("ARG_VALUE") + ".value()");
           }
           if (IsEnum(arg.value.type)) {
@@ -643,7 +648,7 @@ class MojoGenerator : public BaseGenerator {
           }
           code_ += "builder.prepend({{ARG_VALUE}})";
           code_ += "builder.slot({{OFFSET}})";
-          if (!arg.IsRequired()) {
+          if (needs_unpacking) {
             code_.DecrementIdentLevel();
           }
         }
