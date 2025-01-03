@@ -404,7 +404,7 @@ class MojoGenerator : public BaseGenerator {
     code_ += "struct {{NAME}}Builder:";
     code_.IncrementIdentLevel();
     code_ += "@staticmethod";
-    code_ += "fn start(inout builder: flatbuffers.Builder):";
+    code_ += "fn start(mut builder: flatbuffers.Builder):";
     code_.IncrementIdentLevel();
     code_ += "builder.start_object({{FIELD_COUNT}})";
     code_.DecrementIdentLevel();
@@ -416,7 +416,7 @@ class MojoGenerator : public BaseGenerator {
       code_.SetValue("FIELD_NAME", NormalizedName(field));
       code_.SetValue("FIELD_TYPE", MojoTypeCreate(field.value.type));
       code_ += "@staticmethod";
-      code_ += "fn add_{{FIELD_NAME}}(inout builder: flatbuffers.Builder, {{FIELD_NAME}}: {{FIELD_TYPE}}):";
+      code_ += "fn add_{{FIELD_NAME}}(mut builder: flatbuffers.Builder, {{FIELD_NAME}}: {{FIELD_TYPE}}):";
       code_.IncrementIdentLevel();
       code_.SetValue("OFFSET", NumToString(it - struct_def.fields.vec.begin()));
       code_.SetValue("VALUE", NormalizedName(field));
@@ -432,7 +432,7 @@ class MojoGenerator : public BaseGenerator {
       }
       code_.DecrementIdentLevel();
       code_ += "";
-//      code += "    fn add_" + NormalizedName(field) + "(inout self, " +
+//      code += "    fn add_" + NormalizedName(field) + "(mut self, " +
 //              NormalizedName(field) + ":" + MojoType(field.value.type) +
 //              "):\n        b_.prepend" + GenMethod(field.value.type) + "Slot(" +
 //              NumToString(offset) + ", " + NormalizedName(field);
@@ -442,7 +442,7 @@ class MojoGenerator : public BaseGenerator {
     }
 
     code_ += "@staticmethod";
-    code_ += "fn end(inout builder: flatbuffers.Builder) -> flatbuffers.Offset:";
+    code_ += "fn end(mut builder: flatbuffers.Builder) -> flatbuffers.Offset:";
     code_.IncrementIdentLevel();
     code_ += "return builder.end_object()";
     code_.DecrementIdentLevel();
@@ -518,7 +518,7 @@ class MojoGenerator : public BaseGenerator {
       code_ += "@staticmethod";
       code_ += "fn build(";
       code_.IncrementIdentLevel();
-      code_ += "inout builder: flatbuffers.Builder,";
+      code_ += "mut builder: flatbuffers.Builder,";
       code_ += "*,";
       for (auto it = struct_def.fields.vec.begin();
            it != struct_def.fields.vec.end(); ++it) {
@@ -782,7 +782,7 @@ class MojoGenerator : public BaseGenerator {
     code_ += "@staticmethod";
     code_ += "fn build(";
     code_.IncrementIdentLevel();
-    code_ += "inout builder: flatbuffers.Builder,";
+    code_ += "mut builder: flatbuffers.Builder,";
     code_ += "*,";
     StructBuilderArgs(struct_def, "");
     code_.DecrementIdentLevel();
